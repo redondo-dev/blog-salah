@@ -19,7 +19,7 @@
 
                 <?php if (!empty($post['image'])): ?>
                     <div class="text-center mb-4">
-                        <img src="/blog-salah/public/uploads/<?php echo htmlspecialchars($post['image']); ?>" 
+                        <img src="public/assets/images/<?php echo htmlspecialchars($post['image']); ?>" 
                              alt="<?php echo htmlspecialchars($post['title']); ?>"
                              class="img-fluid rounded">
                     </div>
@@ -29,23 +29,19 @@
                     <?php echo nl2br(htmlspecialchars($post['content'])); ?>
                 </div>
 
-                <div class="reaction-buttons">
+                <div class="reaction-buttons d-flex align-items-center">
                     <?php if (isset($_SESSION['user_id'])): ?>
-                        <button class="btn-reaction btn-like <?php echo $hasLiked ? 'active' : ''; ?>" 
-                                onclick="toggleReaction(<?php echo $post['id']; ?>, 'like')" 
-                                id="likeBtn-<?php echo $post['id']; ?>">
-                            <i class="fas fa-thumbs-up"></i>
-                            <span class="reaction-count" id="likeCount-<?php echo $post['id']; ?>">
-                                <?php echo $likeCount; ?>
-                            </span>
+                        <button 
+                            class="btn btn-outline-primary btn-sm me-2 d-flex align-items-center <?php echo $hasLiked ? 'active' : ''; ?>"
+                            onclick="toggleReaction(<?php echo $post['id']; ?>, 'like')">
+                            <i class="fas fa-thumbs-up me-1"></i>
+                            <span class="like-count"><?php echo $likeCount; ?></span>
                         </button>
-                        <button class="btn-reaction btn-dislike <?php echo $hasDisliked ? 'active' : ''; ?>" 
-                                onclick="toggleReaction(<?php echo $post['id']; ?>, 'dislike')" 
-                                id="dislikeBtn-<?php echo $post['id']; ?>">
-                            <i class="fas fa-thumbs-down"></i>
-                            <span class="reaction-count" id="dislikeCount-<?php echo $post['id']; ?>">
-                                <?php echo $dislikeCount ?? 0; ?>
-                            </span>
+                        <button 
+                            class="btn btn-outline-danger btn-sm d-flex align-items-center <?php echo $hasDisliked ? 'active' : ''; ?>"
+                            onclick="toggleReaction(<?php echo $post['id']; ?>, 'dislike')">
+                            <i class="fas fa-thumbs-down me-1"></i>
+                            <span class="dislike-count"><?php echo $dislikeCount; ?></span>
                         </button>
                     <?php else: ?>
                         <div class="text-muted">
@@ -114,39 +110,49 @@ function confirmDelete(postId) {
 }
 
 function toggleReaction(postId, reaction) {
-    fetch('index.php?controller=post&action=toggleReaction&id=' + postId + '&reaction=' + reaction, {
-        method: 'POST',
+    fetch(`index.php?controller=post&action=toggleReaction&id=${postId}&reaction=${reaction}`, {
+        method: 'GET',
         headers: {
-            'Content-Type': 'application/json',
+            'Accept': 'application/json'
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            // Essayons de récupérer le message d'erreur
+            return response.text().then(text => {
+                try {
+                    // Essayons de parser le texte comme JSON
+                    const errorData = JSON.parse(text);
+                    throw new Error(errorData.message || 'Erreur de réaction');
+                } catch (e) {
+                    // Si le parsing échoue, on jette l'erreur originale
+                    throw new Error(text || 'Erreur réseau');
+                }
+            });
+        }
+        return response.json();
+    })
     .then(data => {
-        const likeBtn = document.getElementById('likeBtn-' + postId);
-        const dislikeBtn = document.getElementById('dislikeBtn-' + postId);
-        const likeCount = document.getElementById('likeCount-' + postId);
-        const dislikeCount = document.getElementById('dislikeCount-' + postId);
-        
         if (data.success) {
-            if (reaction === 'like') {
-                likeBtn.classList.toggle('active');
-                likeCount.textContent = data.likeCount;
-                if (data.disliked) {
-                    dislikeBtn.classList.remove('active');
-                    dislikeCount.textContent = data.dislikeCount;
-                }
-            } else {
-                dislikeBtn.classList.toggle('active');
-                dislikeCount.textContent = data.dislikeCount;
-                if (data.liked) {
-                    likeBtn.classList.remove('active');
-                    likeCount.textContent = data.likeCount;
-                }
-            }
+            const likeBtn = document.querySelector(`button[onclick="toggleReaction(${postId}, 'like')"]`);
+            const dislikeBtn = document.querySelector(`button[onclick="toggleReaction(${postId}, 'dislike')"]`);
+            
+            // Mise à jour des compteurs
+            likeBtn.querySelector('.like-count').textContent = data.likeCount;
+            dislikeBtn.querySelector('.dislike-count').textContent = data.dislikeCount;
+            
+            // Gestion des états des boutons
+            likeBtn.classList.toggle('active', data.liked);
+            dislikeBtn.classList.toggle('active', data.disliked);
+        } else {
+            alert(data.message || 'Une erreur est survenue');
         }
     })
-    .catch(error => console.error('Error:', error));
+    .catch(error => {
+        console.error('Erreur de réaction:', error);
+        alert(error.message || 'Une erreur est survenue lors de la réaction');
+    });
 }
 </script>
 
-<?php require_once APP_PATH . 'views/layouts/footer.php'; ?>
+<?php  ?>

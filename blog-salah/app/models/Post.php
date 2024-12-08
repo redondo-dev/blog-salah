@@ -55,14 +55,17 @@ class Post {
         return $stmt;
     }
 
-    public function readOne() {
+    public function readOne($id = null) {
+        // Si aucun ID n'est passé, utiliser l'ID de l'instance
+        $postId = $id ?? $this->id;
+        
         $query = "SELECT p.*, u.username 
-                FROM " . $this->table_name . " p
-                LEFT JOIN users u ON p.user_id = u.id
-                WHERE p.id = :id";
+                  FROM " . $this->table_name . " p
+                  LEFT JOIN users u ON p.user_id = u.id
+                  WHERE p.id = :id";
 
         $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(":id", $this->id);
+        $stmt->bindParam(':id', $postId, PDO::PARAM_INT);
         $stmt->execute();
 
         return $stmt->fetch(PDO::FETCH_ASSOC);
@@ -160,7 +163,7 @@ class Post {
         $stmt->bindParam(':items_per_page', $items_per_page, PDO::PARAM_INT);
         $stmt->execute();
 
-        return $stmt;
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function getUserPostsCount($user_id) {

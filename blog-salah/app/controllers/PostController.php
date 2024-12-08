@@ -30,28 +30,36 @@ class PostController {
         $current_page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         $offset = ($current_page - 1) * $items_per_page;
 
-        // Récupérer le nombre total d'articles
+        // Récupérer les articles
+        $posts = $this->post->readPaginated($offset, $items_per_page);
         $total_items = $this->post->getTotalPosts();
         $total_pages = ceil($total_items / $items_per_page);
+
+        // Ajouter les informations de réaction à chaque post
+        $postsWithReactions = [];
+        foreach ($posts as &$post) {
+            $post['likeCount'] = $this->like->getLikeCount($post['id']);
+            $post['dislikeCount'] = $this->like->getDislikeCount($post['id']);
+            $post['hasLiked'] = isset($_SESSION['user_id']) ? $this->like->hasUserLiked($_SESSION['user_id'], $post['id']) : false;
+            $post['hasDisliked'] = isset($_SESSION['user_id']) ? $this->like->hasUserDisliked($_SESSION['user_id'], $post['id']) : false;
+            $postsWithReactions[] = $post;
+        }
 
         // S'assurer que la page courante est valide
         if ($current_page < 1) {
             $current_page = 1;
-        } elseif ($current_page > $total_pages) {
+        } elseif ($current_page > $total_pages && $total_pages > 0) {
             $current_page = $total_pages;
         }
 
-        // Récupérer les articles pour la page courante
-        $result = $this->post->readPaginated($offset, $items_per_page);
-        $posts = $result->fetchAll(PDO::FETCH_ASSOC);
-
         // Passer les variables à la vue
         $data = [
-            'posts' => $posts,
+            'posts' => $postsWithReactions,
             'total_pages' => $total_pages,
             'current_page' => $current_page,
             'is_admin' => isset($_SESSION['role']) && $_SESSION['role'] === 'admin',
-            'user_id' => $_SESSION['user_id'] ?? null
+            'user_id' => $_SESSION['user_id'] ?? null,
+            'like' => $this->like
         ];
 
         $this->render('posts/list', $data);
@@ -71,7 +79,7 @@ class PostController {
             
             // Gestion de l'upload d'image
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = ROOT_PATH . 'public/uploads/';
+                $uploadDir = ROOT_PATH . 'public/assets/images/';
                 
                 // Créer le dossier s'il n'existe pas
                 if (!file_exists($uploadDir)) {
@@ -147,7 +155,7 @@ class PostController {
 
             // Gestion de l'upload d'une nouvelle image
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = ROOT_PATH . 'public/uploads/';
+                $uploadDir = ROOT_PATH . 'public/assets/images/';
                 if (!file_exists($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
@@ -234,7 +242,7 @@ class PostController {
             if ($this->post->delete()) {
                 // Delete the associated image if it exists
                 if (!empty($post['image'])) {
-                    $imagePath = ROOT_PATH . 'public/uploads/' . $post['image'];
+                    $imagePath = ROOT_PATH . 'public/assets/images/' . $post['image'];
                     if (file_exists($imagePath)) {
                         unlink($imagePath);
                     }
@@ -268,8 +276,15 @@ class PostController {
         }
 
         // Get reaction information
-        $likeCount = $this->like->getLikeCount($id);
-        $dislikeCount = $this->like->getDislikeCount($id);
+        try {
+            $likeCount = $this->like->getLikeCount($id);
+            $dislikeCount = $this->like->getDislikeCount($id);
+        } catch (PDOException $e) {
+            // Si la colonne reaction_type n'existe pas, initialiser les compteurs à 0
+            $likeCount = 0;
+            $dislikeCount = 0;
+            error_log("Erreur lors de la récupération des likes: " . $e->getMessage());
+        }
         $hasLiked = isset($_SESSION['user_id']) ? $this->like->hasUserLiked($_SESSION['user_id'], $id) : false;
         $hasDisliked = isset($_SESSION['user_id']) ? $this->like->hasUserDisliked($_SESSION['user_id'], $id) : false;
 
@@ -278,41 +293,64 @@ class PostController {
     }
 
     public function toggleReaction() {
-        header('Content-Type: application/json');
-        
+        // Vérifier si l'utilisateur est connecté
         if (!isset($_SESSION['user_id'])) {
-            echo json_encode(['success' => false, 'message' => 'User not logged in']);
+            http_response_code(401);
+            echo json_encode(['success' => false, 'message' => 'Non autorisé']);
             exit();
         }
 
+        // Vérifier les paramètres
         if (!isset($_GET['id']) || !isset($_GET['reaction'])) {
-            echo json_encode(['success' => false, 'message' => 'Missing parameters']);
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Paramètres invalides']);
             exit();
         }
 
         $postId = $_GET['id'];
-        $userId = $_SESSION['user_id'];
         $reaction = $_GET['reaction'];
+        $userId = $_SESSION['user_id'];
 
-        if ($reaction === 'like') {
-            $result = $this->like->toggleLike($userId, $postId);
-        } else if ($reaction === 'dislike') {
-            $result = $this->like->toggleDislike($userId, $postId);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Invalid reaction type']);
+        try {
+            // Vérifier si l'utilisateur est le propriétaire du post
+            $this->post->id = $postId;
+            $post = $this->post->readOne($postId);
+            
+            if ($post['user_id'] == $userId) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => 'Vous ne pouvez pas réagir à votre propre article']);
+                exit();
+            }
+
+            if ($reaction === 'like') {
+                $result = $this->like->toggleLike($userId, $postId);
+            } elseif ($reaction === 'dislike') {
+                $result = $this->like->toggleDislike($userId, $postId);
+            } else {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Type de réaction invalide']);
+                exit();
+            }
+
+            // Récupérer les nouveaux compteurs
+            $likeCount = $this->like->getLikeCount($postId);
+            $dislikeCount = $this->like->getDislikeCount($postId);
+            $hasLiked = $this->like->hasUserLiked($userId, $postId);
+            $hasDisliked = $this->like->hasUserDisliked($userId, $postId);
+
+            echo json_encode([
+                'success' => true, 
+                'likeCount' => $likeCount, 
+                'dislikeCount' => $dislikeCount,
+                'liked' => $hasLiked,
+                'disliked' => $hasDisliked
+            ]);
+            exit();
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Erreur serveur']);
             exit();
         }
-
-        $response = [
-            'success' => true,
-            'likeCount' => $this->like->getLikeCount($postId),
-            'dislikeCount' => $this->like->getDislikeCount($postId),
-            'liked' => $this->like->hasUserLiked($userId, $postId),
-            'disliked' => $this->like->hasUserDisliked($userId, $postId)
-        ];
-
-        echo json_encode($response);
-        exit();
     }
 
     public function myPosts() {

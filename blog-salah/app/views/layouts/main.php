@@ -12,15 +12,15 @@
     <link href="/blo-php-salah/public/assets/css/backgrounds.css" rel="stylesheet">
     
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="/blo-php-salah/public/assets/images/favicon.png">
+    <link rel="icon" type="image/png" href="/blog-salah/public/assets/images/favicon.png">
 </head>
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center" href="<?php echo isset($_SESSION['user_id']) ? '/blo-php-salah/public/index.php?controller=post&action=index' : '/blo-php-salah/public/index.php?controller=auth&action=login'; ?>">
+            <a class="navbar-brand d-flex align-items-center" href="<?php echo isset($_SESSION['user_id']) ? '/blog-salah/blog-salah/index.php?controller=post&action=index' : '/blog-salah/blog-salah/index.php?controller=auth&action=login'; ?>">
                 <i class="fas fa-blog text-primary me-2"></i>
-                <span class="fw-bold">Mon Blog</span>
+                <span class="fw-bold">Binevenue sur Mon Blog</span>
             </a>
             
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -30,7 +30,7 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="<?php echo isset($_SESSION['user_id']) ? '/blo-php-salah/public/index.php?controller=post&action=index' : '/blo-php-salah/public/index.php?controller=auth&action=login'; ?>">
+                        <a class="nav-link" href="<?php echo isset($_SESSION['user_id']) ? '/blog-salah/blog-salah/index.php?controller=post&action=index' : '/blog-salah/blog-salah/index.php?controller=auth&action=login'; ?>">
                             <i class="fas fa-newspaper me-1"></i> Articles
                         </a>
                     </li>

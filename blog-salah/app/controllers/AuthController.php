@@ -3,6 +3,7 @@ require_once ROOT_PATH . 'config/database.php';
 require_once APP_PATH . 'models/User.php';
 require_once APP_PATH . 'models/Post.php';
 require_once APP_PATH . 'services/EmailService.php';
+require_once APP_PATH . 'models/Like.php';
 
 class AuthController {
     private $db;
@@ -127,7 +128,18 @@ class AuthController {
         
         // Récupérer les posts de l'utilisateur
         $post = new Post($this->db);
+        $like = new Like($this->db);
         $posts = $post->getUserPosts($_SESSION['user_id']);
+
+        // Ajouter les informations de réaction à chaque post
+        $postsWithReactions = [];
+        foreach ($posts as &$postItem) {
+            $postItem['likeCount'] = $like->getLikeCount($postItem['id']);
+            $postItem['dislikeCount'] = $like->getDislikeCount($postItem['id']);
+            $postItem['hasLiked'] = isset($_SESSION['user_id']) ? $like->hasUserLiked($_SESSION['user_id'], $postItem['id']) : false;
+            $postItem['hasDisliked'] = isset($_SESSION['user_id']) ? $like->hasUserDisliked($_SESSION['user_id'], $postItem['id']) : false;
+            $postsWithReactions[] = $postItem;
+        }
 
         require_once APP_PATH . 'views/auth/profile.php';
     }
